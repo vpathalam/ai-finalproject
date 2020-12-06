@@ -35,6 +35,11 @@ class Config:
         self.rpn_min_overlap = .3
         self.rpn_max_overlap = .7
 
+        # Setting for data augmentation to avoid overfitting
+        self.use_horizontal_flips = False
+        self.use_vertical_flips = False
+        self.rot_90 = False
+
 
 # Calculating Intersection over Union (IoU) metric
 def union(au, bu, area_intersection):
@@ -165,16 +170,18 @@ def rpn_layer(vgg, num_anchors):
     x = Conv2D(512, (3, 3), padding="same", activation="relu", kernel_initializer="normal", name="rpn_conv1")(vgg)
 
     # Classification layer
-    x_classification = Conv2D(num_anchors, (1, 1), activation="sigmoid", kernel_initializer="uniform", name="rpn_out_classification")(x)
+    x_classification = Conv2D(num_anchors, (1, 1), activation="sigmoid", kernel_initializer="uniform",
+                              name="rpn_out_classification")(x)
 
     # Regression layer
-    x_regression = Conv2D(num_anchors * 4, (1, 1), activation="linear", kernel_initializer="zero", name="rpn_out_regression")(x)
+    x_regression = Conv2D(num_anchors * 4, (1, 1), activation="linear", kernel_initializer="zero",
+                          name="rpn_out_regression")(x)
 
     return [x_classification, x_regression, vgg]
 
+
 # classifier layer
 def classifier_layer(vgg, input_rois, num_rois, nb_classes=4):
-
     input_shape = (num_rois, 7, 7, 512)
     pooling_regions = 7
 
@@ -197,12 +204,9 @@ def classifier_layer(vgg, input_rois, num_rois, nb_classes=4):
     return [out_class, out_regr]
 
 
-
-
 # CALCULATING THE RPN FOR ALL ANCHORS IN ALL IMAGES
 # returns y for both classifier and regressor
 def calc_rpn(C, img_data, width, height, resized_width, resized_height, img_length_calc_function):
-
     # Get config params
     downscale = float(C.rpn_stride)
     anchor_sizes = C.anchor_box_scales
@@ -372,3 +376,89 @@ def calc_rpn(C, img_data, width, height, resized_width, resized_height, img_leng
     y_rpn_regr = np.concatenate([np.repeat(y_rpn_overlap, 4, axis=1), y_rpn_regr], axis=1)
 
     return np.copy(y_rpn_cls), np.copy(y_rpn_regr), num_pos
+
+
+def get_new_img_size(width, height, img_min_side=300):
+    if width <= height:
+        f = float(img_min_side) / width
+        resized_height = int(f * height)
+        resized_width = img_min_side
+    else:
+        f = float(img_min_side) / height
+        resized_width = int(f * width)
+        resized_height = img_min_side
+
+    return resized_width, resized_height
+
+
+# image augmentation to avoid overfitting during training
+def augment(img_data, config, augment=True):
+    assert 'filepath' in img_data
+    assert 'bboxes' in img_data
+    assert 'width' in img_data
+    assert 'height' in img_data
+
+    img_data_aug = copy.deepcopy(img_data)
+
+    # use openCV to work with the images
+    img = cv2.imread(img_data_aug['filepath'])
+
+    if augment:
+        rows, cols = img.shape[:2]
+
+        if config.use_horizontal_flips and np.random.randint(0, 2) == 0:
+            img = cv2.flip(img, 1)
+            for bbox in img_data_aug['bboxes']:
+                x1 = bbox['x1']
+                x2 = bbox['x2']
+                bbox['x2'] = cols - x1
+                bbox['x1'] = cols - x2
+
+        if config.use_vertical_flips and np.random.randint(0, 2) == 0:
+            img = cv2.flip(img, 0)
+            for bbox in img_data_aug['bboxes']:
+                y1 = bbox['y1']
+                y2 = bbox['y2']
+                bbox['y2'] = rows - y1
+                bbox['y1'] = rows - y2
+
+        if config.rot_90:
+            angle = np.random.choice([0, 90, 180, 270], 1)[0]
+            if angle == 270:
+                img = np.transpose(img, (1, 0, 2))
+                img = cv2.flip(img, 0)
+            elif angle == 180:
+                img = cv2.flip(img, -1)
+            elif angle == 90:
+                img = np.transpose(img, (1, 0, 2))
+                img = cv2.flip(img, 1)
+            elif angle == 0:
+                pass
+
+            for bbox in img_data_aug['bboxes']:
+                x1 = bbox['x1']
+                x2 = bbox['x2']
+                y1 = bbox['y1']
+                y2 = bbox['y2']
+                if angle == 270:
+                    bbox['x1'] = y1
+                    bbox['x2'] = y2
+                    bbox['y1'] = cols - x2
+                    bbox['y2'] = cols - x1
+                elif angle == 180:
+                    bbox['x2'] = cols - x1
+                    bbox['x1'] = cols - x2
+                    bbox['y2'] = rows - y1
+                    bbox['y1'] = rows - y2
+                elif angle == 90:
+                    bbox['x1'] = rows - y2
+                    bbox['x2'] = rows - y1
+                    bbox['y1'] = x1
+                    bbox['y2'] = x2
+                elif angle == 0:
+                    pass
+
+    img_data_aug['width'] = img.shape[1]
+    img_data_aug['height'] = img.shape[0]
+    return img_data_aug, img
+
