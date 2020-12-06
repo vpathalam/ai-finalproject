@@ -10,6 +10,11 @@ from keras.models import Model
 from keras.engine.topology import InputSpec
 from keras.engine.topology import Layer
 
+# Code adapted from 
+# - https://arxiv.org/abs/1512.02325
+# - http://cs.unc.edu/~wliu/papers/parsenet.pdf
+# - https://medium.com/@smallfishbigsea/understand-ssd-and-implement-your-own-caa3232cd6ad
+
 
 class PriorBox(Layer):
     """
@@ -32,7 +37,7 @@ class PriorBox(Layer):
         self.img_dimension = img_dimension
 
         if min_size <= 0:
-            raise Exception('min_size must be positive.')
+            raise Exception('Error... The min_size dimension needs to be positive.')
 
         self.min_size = min_size
         self.max_size = max_size
@@ -40,7 +45,7 @@ class PriorBox(Layer):
 
         if max_size:
             if max_size < min_size:
-                raise Exception('max_size must be greater than min_size.')
+                raise Exception('Error... The max_size needs to be > min_size.')
             self.aspect_ratios.append(1.0)
 
         if aspect_ratios:
@@ -49,7 +54,7 @@ class PriorBox(Layer):
                     continue
                 self.aspect_ratios.append(aspect_ratio)
                 if flip_aspect_ratios:
-                    self.aspect_ratios.append(1.0 / ar)
+                    self.aspect_ratios.append(1.0 / aspect_ratio)
 
         self.variances = np.array(variances)
         self.clip = True
@@ -77,7 +82,6 @@ class PriorBox(Layer):
         img_width = self.img_dimension[0]
         img_height = self.img_dimension[1]
 
-        # define prior boxes shapes
         box_widths = []
         box_heights = []
 
@@ -102,14 +106,13 @@ class PriorBox(Layer):
         box_widths = 0.5 * np.array(box_widths)
         box_heights = 0.5 * np.array(box_heights)
 
-        # define centers of prior boxes
-        step_x = img_width / layer_width
-        step_y = img_height / layer_height
+        center_x = img_width / layer_width
+        center_y = img_height / layer_height
 
-        linx = np.linspace(0.5 * step_x, img_width - 0.5 * step_x,
+        linx = np.linspace(0.5 * center_x, img_width - 0.5 * center_x,
                            layer_width)
 
-        liny = np.linspace(0.5 * step_y, img_height - 0.5 * step_y,
+        liny = np.linspace(0.5 * center_y, img_height - 0.5 * center_y,
                            layer_height)
 
         centers_x, centers_y = np.meshgrid(linx, liny)
@@ -137,7 +140,7 @@ class PriorBox(Layer):
         elif len(self.variances) == 4:
             variances = np.tile(self.variances, (num_boxes, 1))
         else:
-            raise Exception('Must provide one or four variances.')
+            raise Exception('Error... Either needs to be one or four variance.')
         prior_boxes = np.concatenate((prior_boxes, variances), axis=1)
         prior_boxes_tensor = keras.expand_dims(keras.variable(prior_boxes), 0)
         if keras.backend() == 'tensorflow':
@@ -181,6 +184,7 @@ def SSD300(input_shape, num_classes=21):
     Implementation of SSD300 Architecture for 300x300 images
     # References
         https://arxiv.org/abs/1512.02325
+        https://github.com/rykov8/ssd_keras
     """
     net = {}
 
