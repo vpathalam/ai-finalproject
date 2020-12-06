@@ -64,3 +64,54 @@ def iou(a, b):
 
     return float(area_i) / float(area_u + 1e-6)
 
+
+
+# Creating a Region of Interest (ROI) pooling layer for 2D inputs
+# Spatial Pyramid Pooling in Deep Conv. Nets paper
+class RoiPooling2D(Layer):
+
+    def __init__(self, pool_size, num_rois, **kwargs):
+        self.dim_ordering = K.image_dim_ordering() # "tf", using TensorFlow backend
+        self.pool_size = pool_size
+        self.num_rois = num_rois
+
+        super(RoiPooling2D, self).__init__(**kwargs)
+
+    def build (self, input_shape):
+        self.nb_channels = input_shape[0][3]
+
+    def compute_output_shape(self, input_shape):
+        return None, self.num_rois, self.pool_size, self.pool_size, self.nb_channels
+
+    def call(self, x, mask=None):
+
+        assert(len(x) == 2)
+
+        img = x[0] # image with (rows, cols, channels) as shape
+        rois = x[1] # roi with (num_rois, 4) as shape, ordering is (x, y, w, h)
+
+        input_shape = K.shape(img)
+        outputs = []
+
+        for idx in range(self.num_rois):
+            x = K.cast(rois[0, idx, 0], 'int32')
+            y = K.cast(rois[0, idx, 1], 'int32')
+            w = K.cast(rois[0, idx, 2], 'int32')
+            h = K.cast(rois[0, idx, 3], 'int32')
+
+            # resize ROI to pooling size
+            resized = tf.image.resize_images(img[:, y:y + h, x:x + w, :], (self.pool_size, self.pool_size))
+            outputs.append(resized)
+
+        # reshape to (1, num_rois, pool size, pool size, # of channels)
+        final_out = K.concatenate(outputs, axis = 0)
+        final_out = K.reshape(final_out, (1, self.num_rois, self.pool_size, self.pool_size, self.nb_channels))
+        final_out = K.permute_dimensions(final_out, (0, 1, 2, 3, 4))
+
+        return final_out
+
+    def get_config(self):
+        config = {"pool_size": self.pool_size,
+                  "num_rois": self.num_rois}
+        base_config = super(RoiPooling2D, self).get_config()
+        return dict( list(base_config.items()) + list(config.items()) )
