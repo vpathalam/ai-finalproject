@@ -109,43 +109,48 @@ class PriorBox(Layer):
         center_x = img_width / layer_width
         center_y = img_height / layer_height
 
-        linx = np.linspace(0.5 * center_x, img_width - 0.5 * center_x,
+        x = np.linspace(0.5 * center_x, img_width - 0.5 * center_x,
                            layer_width)
 
-        liny = np.linspace(0.5 * center_y, img_height - 0.5 * center_y,
+        y = np.linspace(0.5 * center_y, img_height - 0.5 * center_y,
                            layer_height)
 
-        centers_x, centers_y = np.meshgrid(linx, liny)
+        centers_x, centers_y = np.meshgrid(x, y)
         centers_x = centers_x.reshape(-1, 1)
         centers_y = centers_y.reshape(-1, 1)
-        # define xmin, ymin, xmax, ymax of prior boxes
 
         num_priors_ = len(self.aspect_ratios)
         prior_boxes = np.concatenate((centers_x, centers_y), axis=1)
         prior_boxes = np.tile(prior_boxes, (1, 2 * num_priors_))
+
         prior_boxes[:, ::4] -= box_widths
         prior_boxes[:, 1::4] -= box_heights
         prior_boxes[:, 2::4] += box_widths
         prior_boxes[:, 3::4] += box_heights
         prior_boxes[:, ::2] /= img_width
         prior_boxes[:, 1::2] /= img_height
+        
         prior_boxes = prior_boxes.reshape(-1, 4)
 
         if self.clip:
             prior_boxes = np.minimum(np.maximum(prior_boxes, 0.0), 1.0)
         # define variances
         num_boxes = len(prior_boxes)
+
         if len(self.variances) == 1:
             variances = np.ones((num_boxes, 4)) * self.variances[0]
         elif len(self.variances) == 4:
             variances = np.tile(self.variances, (num_boxes, 1))
         else:
             raise Exception('Error... Either needs to be one or four variance.')
+
         prior_boxes = np.concatenate((prior_boxes, variances), axis=1)
         prior_boxes_tensor = keras.expand_dims(keras.variable(prior_boxes), 0)
+
         if keras.backend() == 'tensorflow':
             pattern = [tf.shape(x)[0], 1, 1]
             prior_boxes_tensor = tf.tile(prior_boxes_tensor, pattern)
+
         return prior_boxes_tensor
 
 class Normalize(Layer):
