@@ -12,26 +12,11 @@ from keras.engine.topology import Layer
 
 
 class PriorBox(Layer):
-    """Generate the prior boxes of designated sizes and aspect ratios.
-    # Arguments
-        img_size: Size of the input image as tuple (w, h).
-        min_size: Minimum box size in pixels.
-        max_size: Maximum box size in pixels.
-        aspect_ratios: List of aspect ratios of boxes.
-        flip: Whether to consider reverse aspect ratios.
-        variances: List of variances for x, y, w, h.
-        clip: Whether to clip the prior's coordinates
-            such that they are within [0, 1].
-    # Input shape
-        4D tensor with shape:
-        `(samples, channels, rows, cols)` if dim_ordering='th'
-        or 4D tensor with shape:
-        `(samples, rows, cols, channels)` if dim_ordering='tf'.
-    # Output shape
-        3D tensor with shape:
-        (samples, num_boxes, 8)
+    """
+    Build the Prior Boxes from images
     # References
         https://arxiv.org/abs/1512.02325
+        https://github.com/rykov8/ssd_keras
     """
     def __init__(self, img_dimension, min_size, max_size=None, aspect_ratios=None,
                  flip_aspect_ratios=True, variances=[0.1], clip=True, **kwargs):
@@ -131,7 +116,7 @@ class PriorBox(Layer):
         centers_x = centers_x.reshape(-1, 1)
         centers_y = centers_y.reshape(-1, 1)
         # define xmin, ymin, xmax, ymax of prior boxes
-        
+
         num_priors_ = len(self.aspect_ratios)
         prior_boxes = np.concatenate((centers_x, centers_y), axis=1)
         prior_boxes = np.tile(prior_boxes, (1, 2 * num_priors_))
