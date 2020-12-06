@@ -158,3 +158,15 @@ def vgg_base(input_tensor=None, trainable=False):
 
     return x
 
+
+# create Regional Proposal Network (rpn) layer
+def rpn_layer(vgg, num_anchors):
+    x = Conv2D(512, (3, 3), padding="same", activation="relu", kernel_initializer="normal", name="rpn_conv1")(vgg)
+
+    # Classification layer
+    x_classification = Conv2D(num_anchors, (1, 1), activation="sigmoid", kernel_initializer="uniform", name="rpn_out_classification")(x)
+
+    # Regression layer
+    x_regression = Conv2D(num_anchors * 4, (1, 1), activation="linear", kernel_initializer="zero", name="rpn_out_regression")(x)
+
+    return [x_classification, x_regression, vgg]
